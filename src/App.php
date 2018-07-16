@@ -212,5 +212,7 @@ class App
             }
             $response->end($res);
         });
+
+        $this->httpServer->start();
     }
 }
