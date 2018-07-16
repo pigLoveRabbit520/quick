@@ -1,6 +1,8 @@
 <?php
 namespace Quick;
 
+use InvalidArgumentException;
+
 class App
 {
     /**
