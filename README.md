@@ -1,3 +1,8 @@
+# install
+```
+composer require salamander/quick
+```
+
 # quick start
 ```
 <?php
