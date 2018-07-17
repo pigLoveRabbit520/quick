@@ -2,6 +2,7 @@
 namespace Quick;
 
 use InvalidArgumentException;
+use Psr\Container\ContainerInterface;
 
 class App
 {

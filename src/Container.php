@@ -9,7 +9,7 @@ use Pimple\Container as PimpleContainer;
  * Quick's default DI container is Pimple.
  *
  */
-class Container extends PimpleContainer
+class Container extends PimpleContainer implements ContainerInterface
 {
     /**
      * Default settings
@@ -36,6 +36,24 @@ class Container extends PimpleContainer
     public function __construct(array $values = [])
     {
         parent::__construct($values);
+
+        $userSettings = isset($values['settings']) ? $values['settings'] : [];
+        $this->registerDefaultServices($userSettings);
+    }
+
+    private function registerDefaultServices($userSettings)
+    {
+        $defaultSettings = $this->defaultSettings;
+
+        /**
+         * This service MUST return an array or an
+         * instance of \ArrayAccess.
+         *
+         * @return array|\ArrayAccess
+         */
+        $this['settings'] = function () use ($userSettings, $defaultSettings) {
+            return array_merge($defaultSettings, $userSettings);
+        };
     }
 
 
