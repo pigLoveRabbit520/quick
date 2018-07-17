@@ -3,6 +3,8 @@ namespace Quick;
 
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
+use swoole_http_server;
+use FastRoute;
 
 class App
 {
@@ -170,7 +172,7 @@ class App
 
     public function start()
     {
-        $this->httpServer = new swoole_http_server($this->container->host, $this->container->port);
+        $this->httpServer = new swoole_http_server($this->container->settings['host'], $this->container->settings['port']);
         $this->dispatcher = FastRoute\simpleDispatcher(function(FastRoute\RouteCollector $r) {
             foreach ($this->routesMap as $item) {
                 $r->addRoute($item[0], $item[1], $item[2]);
@@ -178,10 +180,10 @@ class App
         });
 
         $this->httpServer->on("start", function ($server) {
-            echo sprintf('Swoole http server is started at http://%s:%d\n', $this->container->host, $this->container->port);
+            echo sprintf('Swoole http server is started at http://%s:%d\n', $this->container->settings['host'], $this->container->settings['port']);
         });
 
-        $this->httpServer->on("request", function (swoole_http_request $request, swoole_http_response $response) {
+        $this->httpServer->on("request", function ($request, $response) {
             $response->header("X-Powered-By", "salamander/quick");
 
             // Fetch method and URI from somewhere
