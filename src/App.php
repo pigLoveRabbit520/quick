@@ -180,7 +180,7 @@ class App
         });
 
         $this->httpServer->on("start", function ($server) {
-            echo sprintf('Swoole http server is started at http://%s:%d\n', $this->container->settings['host'], $this->container->settings['port']);
+            echo sprintf("Swoole http server is started at http://%s:%u\n", $this->container->settings['host'], $this->container->settings['port']);
         });
 
         $this->httpServer->on("request", function ($request, $response) {
