@@ -3,6 +3,8 @@ namespace Quick;
 
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
+use Quick\Exception\MethodNotAllowedException;
+use Quick\Exception\NotFoundException;
 use swoole_http_server;
 use FastRoute;
 
@@ -166,9 +168,89 @@ class App
      */
     public function map(array $methods, $pattern, $callable)
     {
+        if ($callable instanceof \Closure) {
+            $callable = $callable->bindTo($this->container);
+        }
         $this->routesMap[] = [$methods, $pattern, $callable];
     }
 
+    protected function handleException(Exception $e, ServerRequestInterface $request, ResponseInterface $response)
+    {
+        if ($e instanceof MethodNotAllowedException) {
+            $handler = 'notAllowedHandler';
+            $params = [$e->getRequest(), $e->getResponse(), $e->getAllowedMethods()];
+        } elseif ($e instanceof NotFoundException) {
+            $handler = 'notFoundHandler';
+            $params = [$e->getRequest(), $e->getResponse(), $e];
+        } elseif ($e instanceof SlimException) {
+            // This is a Stop exception and contains the response
+            return $e->getResponse();
+        } else {
+            // Other exception, use $request and $response params
+            $handler = 'errorHandler';
+            $params = [$request, $response, $e];
+        }
+
+        if ($this->container->has($handler)) {
+            $callable = $this->container->get($handler);
+            // Call the registered handler
+            return call_user_func_array($callable, $params);
+        }
+
+        // No handlers found, so just throw the exception
+        throw $e;
+    }
+
+    /**
+     * @param $request
+     * @param $response
+     * @param $httpMethod
+     * @param $uri
+     * @return mixed|string
+     * @throws MethodNotAllowedException
+     * @throws NotFoundException
+     * @throws \Interop\Container\Exception\ContainerException
+     */
+    protected function process($request, $response, $httpMethod, $uri)
+    {
+        $routeInfo = $this->dispatcher->dispatch($httpMethod, $uri);
+        try {
+            switch ($routeInfo[0]) {
+                case FastRoute\Dispatcher::NOT_FOUND:
+                    if (!$this->container->has('notFoundHandler')) {
+                        throw new NotFoundException($request, $response);
+                    }
+                    /** @var callable $notFoundHandler */
+                    $notFoundHandler = $this->container->get('notFoundHandler');
+                    return $notFoundHandler($request, $response);
+                    break;
+                case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+                    $allowedMethods = $routeInfo[1];
+                    if (!$this->container->has('notAllowedHandler')) {
+                        throw new MethodNotAllowedException($request, $response);
+                    }
+                    /** @var callable $notAllowedHandler */
+                    $notAllowedHandler = $this->container->get('notAllowedHandler');
+                    return $notAllowedHandler($request, $response, $routeInfo[1]);
+                    break;
+                case FastRoute\Dispatcher::FOUND:
+                    $handler = $routeInfo[1];
+                    $vars = $routeInfo[2];
+                    if ($handler instanceof \Closure) {
+                        $res = $handler($request, $response, $vars);
+                    } else {
+                        $parts = explode(':', $handler);
+                        $controller = new $parts[0]($this->container);
+                        $method = $parts[1];
+                        $res = call_user_func_array(array($controller, $method), [$request, $response, $vars]);
+                    }
+                    return $res;
+                    break;
+            }
+        } catch (\Exception $ex) {
+
+        }
+    }
 
     public function start()
     {
@@ -195,26 +277,7 @@ class App
                 $uri = substr($uri, 0, $pos);
             }
             $uri = rawurldecode($uri);
-            $res = '';
-
-            $routeInfo = $this->dispatcher->dispatch($httpMethod, $uri);
-            switch ($routeInfo[0]) {
-                case FastRoute\Dispatcher::NOT_FOUND:
-                    // ... 404 Not Found
-                    break;
-                case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-                    $allowedMethods = $routeInfo[1];
-                    // ... 405 Method Not Allowed
-                    break;
-                case FastRoute\Dispatcher::FOUND:
-                    $handler = $routeInfo[1];
-                    $vars = $routeInfo[2];
-                    $parts = explode(':', $handler);
-                    $controller = new $parts[0];
-                    $method = $parts[1];
-                    $res = call_user_func_array(array($controller, $method), [$vars]);
-                    break;
-            }
+            $res = $this->process($request, $response, $httpMethod, $uri);
             $response->end($res);
         });
 

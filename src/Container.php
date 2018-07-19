@@ -4,6 +4,7 @@ namespace Quick;
 use Interop\Container\ContainerInterface;
 use Interop\Container\Exception\ContainerException;
 use Pimple\Container as PimpleContainer;
+use Quick\Handlers\NotAllowed;
 
 /**
  * Quick's default DI container is Pimple.
@@ -54,6 +55,70 @@ class Container extends PimpleContainer implements ContainerInterface
         $this['settings'] = function () use ($userSettings, $defaultSettings) {
             return array_merge($defaultSettings, $userSettings);
         };
+
+        $this->registerHandlers($this);
+    }
+
+    protected function registerHandlers($container) {
+        if (!isset($container['errorHandler'])) {
+            /**
+             * This service MUST return a callable
+             * that accepts three arguments:
+             *
+             * 1. Instance of \Psr\Http\Message\ServerRequestInterface
+             * 2. Instance of \Psr\Http\Message\ResponseInterface
+             * 3. Instance of \Exception
+             *
+             * The callable MUST return an instance of
+             * \Psr\Http\Message\ResponseInterface.
+             *
+             * @param Container $container
+             *
+             * @return callable
+             */
+            $container['errorHandler'] = function ($container) {
+                return new Error(
+                    $container->get('settings')['displayErrorDetails']
+                );
+            };
+        }
+
+        if (!isset($container['notFoundHandler'])) {
+            /**
+             * This service MUST return a callable
+             * that accepts two arguments:
+             *
+             * 1. Instance of \Psr\Http\Message\ServerRequestInterface
+             * 2. Instance of \Psr\Http\Message\ResponseInterface
+             *
+             * The callable MUST return an instance of
+             * \Psr\Http\Message\ResponseInterface.
+             *
+             * @return callable
+             */
+            $container['notFoundHandler'] = function () {
+                return new NotAllowed();
+            };
+        }
+
+        if (!isset($container['notAllowedHandler'])) {
+            /**
+             * This service MUST return a callable
+             * that accepts three arguments:
+             *
+             * 1. Instance of \Psr\Http\Message\ServerRequestInterface
+             * 2. Instance of \Psr\Http\Message\ResponseInterface
+             * 3. Array of allowed HTTP methods
+             *
+             * The callable MUST return an instance of
+             * \Psr\Http\Message\ResponseInterface.
+             *
+             * @return callable
+             */
+            $container['notAllowedHandler'] = function () {
+                return new NotAllowed();
+            };
+        }
     }
 
 
